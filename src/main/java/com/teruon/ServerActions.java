@@ -45,7 +45,12 @@ public final class ServerActions {
         ServerPlayerEntity player = ctx.player();
         TeruonEntity ent = findOwned(ctx, player);
         boolean holding = isHolding(player);
-        if (ent == null && !holding) return; // не с кем говорить
+        if (ent == null && !holding) {
+            if (!"none".equals(p.action())) {
+                player.sendMessage(Text.literal("§7Teruon слишком далеко, чтобы помочь делом."), true);
+            }
+            return;
+        }
 
         if (ent != null) ent.startTalking(p.talkTicks());
 

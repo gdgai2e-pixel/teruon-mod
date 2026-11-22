@@ -12,6 +12,7 @@ public class TeruonConfigScreen extends Screen {
     private TextFieldWidget keyField, modelField, sttField;
     private ButtonWidget chatButton;
     private boolean publicChat;
+    private boolean teruonChat;
 
     public TeruonConfigScreen(Screen parent) {
         super(Text.literal("Teruon — настройки"));
@@ -22,6 +23,7 @@ public class TeruonConfigScreen extends Screen {
     protected void init() {
         TeruonConfig cfg = TeruonConfig.get();
         publicChat = cfg.sendToPublicChat;
+        teruonChat = cfg.chatWithTeruon;
         int cx = width / 2, w = 300, x = cx - w / 2;
 
         keyField = new TextFieldWidget(textRenderer, x, 50, w, 20, Text.literal("API key"));
@@ -45,17 +47,27 @@ public class TeruonConfigScreen extends Screen {
         }).dimensions(x, 160, w, 20).build();
         addDrawableChild(chatButton);
 
+        addDrawableChild(ButtonWidget.builder(teruonChatLabel(), b -> {
+            teruonChat = !teruonChat;
+            b.setMessage(teruonChatLabel());
+        }).dimensions(x, 185, w, 20).build());
+
         addDrawableChild(ButtonWidget.builder(Text.literal("Сохранить"), b -> {
             cfg.apiKey = keyField.getText().trim();
             cfg.model = modelField.getText().trim();
             cfg.sttModel = sttField.getText().trim();
             cfg.sendToPublicChat = publicChat;
+            cfg.chatWithTeruon = teruonChat;
             cfg.save();
             close();
-        }).dimensions(x, 195, 145, 20).build());
+        }).dimensions(x, 220, 145, 20).build());
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Отмена"), b -> close())
-                .dimensions(x + 155, 195, 145, 20).build());
+                .dimensions(x + 155, 220, 145, 20).build());
+    }
+
+    private Text teruonChatLabel() {
+        return Text.literal("Писать Teruon без команды: " + (teruonChat ? "вкл" : "выкл"));
     }
 
     private Text chatLabel() {

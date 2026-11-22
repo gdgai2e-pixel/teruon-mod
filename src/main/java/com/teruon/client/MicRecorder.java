@@ -2,22 +2,24 @@ package com.teruon.client;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
+import java.util.List;
 import javax.sound.sampled.AudioFileFormat;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.DataLine;
+import javax.sound.sampled.Mixer;
 import javax.sound.sampled.TargetDataLine;
 
-/** Пишет микрофон, сам останавливается после паузы в речи (или по повторному нажатию M). */
+/** Пишет микрофон, пока держишь V. */
 public final class MicRecorder {
     public interface Callback {
         void onDone(byte[] wav);
         void onError(String message);
     }
 
-    private static final double SPEECH_RMS = 600;   // порог "это речь"; подкрути, если микрофон тихий/шумный
-    private static final int SILENCE_CHUNKS = 12;   // 12 * 0.1с = 1.2с тишины -> конец
-    private static final long WAIT_FOR_SPEECH_MS = 8000;
+    private static final double SPEECH_RMS = 150;  // ниже — считаем тишиной (подкрути, если микрофон очень тихий)
     private static final long MAX_MS = 20000;
 
     private final Callback cb;
@@ -37,32 +39,47 @@ public final class MicRecorder {
         stopRequested = true;
     }
 
+    /** Подбираем формат, который микрофон реально умеет (16 кГц, иначе 44.1/48/22 кГц). */
+    private static AudioFormat pickFormat() {
+        for (float rate : new float[] {16000f, 44100f, 48000f, 22050f}) {
+            AudioFormat f = new AudioFormat(rate, 16, 1, true, false);
+            if (AudioSystem.isLineSupported(new DataLine.Info(TargetDataLine.class, f))) return f;
+        }
+        return null;
+    }
+
     private void run() {
-        AudioFormat fmt = new AudioFormat(16000f, 16, 1, true, false);
         TargetDataLine line = null;
         try {
+            AudioFormat fmt = pickFormat();
+            if (fmt == null) {
+                cb.onError("§cНе найден микрофон, который умеет писать звук. Проверь /teruon mic");
+                return;
+            }
             line = AudioSystem.getTargetDataLine(fmt);
             line.open(fmt);
             line.start();
 
             ByteArrayOutputStream pcm = new ByteArrayOutputStream();
-            byte[] buf = new byte[3200]; // 100 мс
+            byte[] buf = new byte[((int) fmt.getSampleRate() / 10) * 2]; // 100 мс
             long start = System.currentTimeMillis();
-            boolean speech = false;
-            int silent = 0;
+            double max = 0;
 
             while (!stopRequested) {
                 int n = line.read(buf, 0, buf.length);
                 if (n <= 0) continue;
                 pcm.write(buf, 0, n);
-                if (rms(buf, n) > SPEECH_RMS) { speech = true; silent = 0; } else { silent++; }
-
-                long el = System.currentTimeMillis() - start;
-                if (el > MAX_MS) break; // максимум 20 секунд, дальше стоп
+                max = Math.max(max, rms(buf, n));
+                if (System.currentTimeMillis() - start > MAX_MS) break;
             }
             line.stop();
-            if (!speech) {
-                cb.onError("Я ничего не услышал.");
+
+            if (System.currentTimeMillis() - start < 500) {
+                cb.onError("Слишком коротко — держи V, пока говоришь.");
+                return;
+            }
+            if (max < SPEECH_RMS) {
+                cb.onError("Я ничего не услышал (громкость " + (int) max + "). Проверь микрофон: /teruon mic");
                 return;
             }
             byte[] data = pcm.toByteArray();
@@ -70,11 +87,52 @@ public final class MicRecorder {
             ByteArrayOutputStream wav = new ByteArrayOutputStream();
             AudioSystem.write(ais, AudioFileFormat.Type.WAVE, wav);
             cb.onDone(wav.toByteArray());
-        } catch (Exception e) {
-            cb.onError("Не удалось открыть микрофон: " + e.getMessage());
+        } catch (Throwable e) {
+            cb.onError("§cНе удалось записать звук: " + (e.getMessage() != null ? e.getMessage() : e.toString()));
         } finally {
             if (line != null) line.close();
         }
+    }
+
+    /** /teruon mic — показывает, какие микрофоны видит Java и какая у них громкость (3 секунды записи). */
+    public static List<String> diagnose() {
+        List<String> out = new ArrayList<>();
+        try {
+            int count = 0;
+            for (Mixer.Info mi : AudioSystem.getMixerInfo()) {
+                if (AudioSystem.getMixer(mi).getTargetLineInfo().length > 0) {
+                    out.add("Устройство записи: " + mi.getName());
+                    count++;
+                }
+            }
+            if (count == 0) {
+                out.add("§cJava не видит ни одного микрофона. Проверь Windows: Параметры -> Конфиденциальность -> Микрофон.");
+                return out;
+            }
+            AudioFormat fmt = pickFormat();
+            if (fmt == null) {
+                out.add("§cНет подходящего формата записи.");
+                return out;
+            }
+            out.add("Формат записи: " + (int) fmt.getSampleRate() + " Гц");
+            TargetDataLine line = AudioSystem.getTargetDataLine(fmt);
+            line.open(fmt);
+            line.start();
+            byte[] buf = new byte[((int) fmt.getSampleRate() / 10) * 2];
+            double max = 0;
+            long end = System.currentTimeMillis() + 3000;
+            while (System.currentTimeMillis() < end) {
+                int n = line.read(buf, 0, buf.length);
+                if (n > 0) max = Math.max(max, rms(buf, n));
+            }
+            line.stop();
+            line.close();
+            out.add("Максимальная громкость за 3 сек: " + (int) max
+                    + (max < SPEECH_RMS ? " §c(тишина — микрофон не слышит или выключен)" : " §a(микрофон работает)"));
+        } catch (Throwable e) {
+            out.add("§cОшибка теста: " + (e.getMessage() != null ? e.getMessage() : e.toString()));
+        }
+        return out;
     }
 
     private static double rms(byte[] b, int n) {

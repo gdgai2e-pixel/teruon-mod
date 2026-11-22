@@ -18,6 +18,8 @@ public class TeruonConfig {
     public String sttModel = "google/gemini-2.5-flash";
     /** true — твои слова уходят в общий чат сервера, false — видишь только ты. */
     public boolean sendToPublicChat = false;
+    /** true — обычные сообщения в чате уходят Teruon, когда он в руке или рядом ("!" в начале — написать в обычный чат). */
+    public boolean chatWithTeruon = true;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("teruon.json");
