@@ -58,9 +58,7 @@ public final class MicRecorder {
                 if (rms(buf, n) > SPEECH_RMS) { speech = true; silent = 0; } else { silent++; }
 
                 long el = System.currentTimeMillis() - start;
-                if (speech && silent >= SILENCE_CHUNKS) break;
-                if (!speech && el > WAIT_FOR_SPEECH_MS) break;
-                if (el > MAX_MS) break;
+                if (el > MAX_MS) break; // максимум 20 секунд, дальше стоп
             }
             line.stop();
             if (!speech) {

@@ -33,6 +33,7 @@ public class Teruon implements ModInitializer {
     @Override
     public void onInitialize() {
         FabricDefaultAttributeRegistry.register(TERUON_ENTITY, TeruonEntity.createTeruonAttributes());
+        DropHandler.register();
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> entries.add(TERUON_ITEM));
 
         PayloadTypeRegistry.playC2S().register(ActionPayload.ID, ActionPayload.CODEC);

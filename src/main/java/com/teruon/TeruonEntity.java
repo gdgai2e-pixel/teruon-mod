@@ -51,10 +51,15 @@ public class TeruonEntity extends PathAwareEntity {
 
     @Nullable
     public static TeruonEntity spawnFor(World world, PlayerEntity owner, Vec3d pos) {
+        return spawnAt(world, owner.getUuid(), pos, owner.getYaw());
+    }
+
+    @Nullable
+    public static TeruonEntity spawnAt(World world, @Nullable UUID owner, Vec3d pos, float yaw) {
         TeruonEntity e = Teruon.TERUON_ENTITY.create(world);
         if (e == null) return null;
-        e.refreshPositionAndAngles(pos.x, pos.y, pos.z, owner.getYaw(), 0f);
-        e.setOwner(owner.getUuid());
+        e.refreshPositionAndAngles(pos.x, pos.y, pos.z, yaw, 0f);
+        e.setOwner(owner);
         e.setCustomName(Text.literal("Teruon"));
         e.setCustomNameVisible(true);
         world.spawnEntity(e);

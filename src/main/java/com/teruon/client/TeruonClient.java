@@ -40,10 +40,14 @@ public class TeruonClient implements ClientModInitializer {
         EntityRendererRegistry.register(Teruon.TERUON_ENTITY, TeruonRenderer::new);
 
         talkKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.teruon.talk", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_M, "category.teruon"));
+                "key.teruon.talk", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, "category.teruon"));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (talkKey.wasPressed()) onTalkKey(client);
+            // отпустил V -> запись закончилась, отправляем
+            if (state == State.LISTENING && recorder != null && !talkKey.isPressed()) {
+                recorder.requestStop();
+            }
         });
 
         HudRenderCallback.EVENT.register(TeruonClient::renderHud);
@@ -60,8 +64,7 @@ public class TeruonClient implements ClientModInitializer {
     // ------------------------------------------------------------ клавиша M
     private static void onTalkKey(MinecraftClient mc) {
         if (mc.player == null) return;
-        if (state == State.LISTENING) { recorder.requestStop(); return; }
-        if (state == State.THINKING) return;
+        if (state != State.IDLE) return;
 
         if (!canTalk(mc)) {
             info(mc, "Возьми Teruon в руку (ПКМ по нему пустой рукой) или позови его поближе.");
